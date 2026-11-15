@@ -1,0 +1,1483 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>熟語かくれんぼ</title>
+<style>
+  * { 
+    box-sizing: border-box; 
+    margin: 0; 
+    padding: 0; 
+    user-select: none; 
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent; 
+  }
+  body {
+    background-color: #050505;
+    color: #111;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+    overflow: hidden;
+    touch-action: manipulation;
+  }
+
+  /* 16:9 アスペクト比固定 メインコンテナ - 赤ネオンテーマ */
+  #game-container {
+    position: relative;
+    width: 96vw;
+    height: 54vw;
+    max-width: 1200px;
+    max-height: 675px;
+    background: #110000;
+    border-radius: 18px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.8), 0 0 25px rgba(220, 38, 38, 0.3);
+    border: 1px solid #450a0a;
+    overflow: hidden;
+  }
+
+  #track-container {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none;
+  }
+
+  .track-tile {
+    position: absolute;
+    width: clamp(26px, 3.2vw, 36px);
+    height: clamp(26px, 3.2vw, 36px);
+    background: #1c1917;
+    border: 2px solid #57534e;
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: clamp(9px, 1.1vw, 11px);
+    font-weight: bold;
+    color: #a8a29e;
+    transition: all 0.3s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    transform: translate(-50%, -50%);
+  }
+
+  @keyframes tilePop {
+    0% { transform: translate(-50%, -50%) scale(1); }
+    50% { transform: translate(-50%, -50%) scale(1.4); box-shadow: 0 0 18px rgba(239, 68, 68, 0.9); z-index: 30; }
+    100% { transform: translate(-50%, -50%) scale(1); }
+  }
+  .tile-pop {
+    animation: tilePop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  .track-tile.active-red {
+    background: #ef4444;
+    border-color: #991b1b;
+    color: #fff;
+    box-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+  }
+  .track-tile.active-orange {
+    background: #f97316;
+    border-color: #c2410c;
+    color: #fff;
+    box-shadow: 0 0 14px rgba(249, 115, 22, 0.9);
+  }
+  .track-tile.active-orbit {
+    background: #fef08a !important;
+    border-color: #eab308 !important;
+    color: #854d0e !important;
+    box-shadow: 0 0 22px #facc15, 0 0 10px #ffffff !important;
+    transform: translate(-50%, -50%) scale(1.38) !important;
+    z-index: 40;
+  }
+  .track-tile.start-tile {
+    background: #f43f5e;
+    border-color: #be123c;
+    color: #ffffff;
+    font-size: clamp(8px, 1vw, 10px);
+  }
+  .track-tile.goal-tile {
+    background: #facc15;
+    border-color: #ca8a04;
+    color: #422006;
+    font-size: clamp(8px, 1vw, 10px);
+    animation: pulse-goal 1.5s infinite;
+  }
+  @keyframes pulse-goal {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); }
+    50% { transform: translate(-50%, -50%) scale(1.12); box-shadow: 0 0 15px rgba(250, 204, 21, 0.8); }
+  }
+
+  /* 白基調のメインコンテンツエリア */
+  #main-content {
+    position: absolute;
+    top: clamp(38px, 8.2%, 60px);
+    left: clamp(38px, 8.2%, 60px);
+    right: clamp(38px, 8.2%, 60px);
+    bottom: clamp(38px, 8.2%, 60px);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    padding: clamp(6px, 1.2vw, 12px) clamp(10px, 1.8vw, 18px);
+    background: #fafaf9; /* 白基調 */
+    border-radius: 14px;
+    border: 1px solid #e7e5e4;
+    box-shadow: inset 0 0 15px rgba(0,0,0,0.05), 0 5px 15px rgba(0,0,0,0.3);
+  }
+
+  #header {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: clamp(4px, 1vw, 12px);
+    flex-wrap: nowrap;
+  }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: clamp(4px, 0.8vw, 10px);
+    flex-shrink: 0;
+  }
+  .stat-box {
+    font-size: clamp(11px, 1.3vw, 15px);
+    font-weight: 700;
+    background: #ffffff;
+    border: 1px solid #d6d3d1;
+    padding: 4px clamp(6px, 1.2vw, 14px);
+    border-radius: 20px;
+    color: #44403c;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    white-space: nowrap;
+    transition: transform 0.15s;
+  }
+  #stage-display { color: #dc2626; }
+  #points-display { color: #ea580c; background: #fff7ed; border-color: #fdba74; }
+  #points-display.rolling {
+    transform: scale(1.1);
+    background: #ffedd5;
+    border-color: #f97316;
+    color: #c2410c;
+  }
+  #timer-display { color: #0284c7; background: #f0f9ff; border-color: #bae6fd; }
+
+  .btn-ui {
+    cursor: pointer;
+    font-size: clamp(10px, 1.1vw, 13px);
+    font-weight: bold;
+    background: #ffffff;
+    border: 1px solid #d6d3d1;
+    color: #57534e;
+    padding: 4px clamp(6px, 1vw, 12px);
+    border-radius: 20px;
+    transition: all 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    white-space: nowrap;
+  }
+  .btn-ui:hover { background: #f5f5f4; }
+
+  /* ふりがなボタン（熟語と同じ赤い枠デザイン） */
+  #ruby-btn {
+    border: 2px solid #ef4444;
+    background: #fef2f2;
+    color: #991b1b;
+  }
+  #ruby-btn:hover {
+    background: #fee2e2;
+  }
+
+  #workspace {
+    width: 100%;
+    flex: 1;
+    display: flex;
+    gap: clamp(12px, 2vw, 24px);
+    align-items: stretch;
+    justify-content: space-between;
+    margin-top: 8px;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /* 左側：作文エリア（縦書き） */
+  #composition-container {
+    flex: 1;
+    background: #ffffff;
+    border: 2px dashed #d6d3d1;
+    border-radius: 12px;
+    padding: 16px;
+    position: relative;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,0.02);
+    display: flex;
+    flex-direction: column;
+  }
+  .comp-title {
+    font-size: clamp(12px, 1.2vw, 14px);
+    font-weight: 700;
+    color: #78716c;
+    text-align: center;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+  }
+  #composition-area {
+    flex: 1;
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+    font-size: clamp(16px, 2vw, 24px);
+    line-height: 2.2;
+    color: #292524;
+    padding: 10px;
+    overflow-x: auto;
+    font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+  }
+
+  /* 熟語の枠 (ドラッグ可能) */
+  .draggable-word {
+    display: inline-block;
+    border: 2px solid #ef4444;
+    border-radius: 6px;
+    padding: 4px 6px;
+    margin: 0 2px;
+    background: #fef2f2;
+    cursor: grab;
+    color: #991b1b;
+    font-weight: bold;
+    font-size: clamp(16px, 2vw, 24px);
+    font-family: 'Hiragino Kaku Gothic ProN', sans-serif;
+    touch-action: none;
+    transition: transform 0.2s, box-shadow 0.2s, opacity 0.3s;
+    position: relative;
+    white-space: nowrap;
+  }
+  /* ステージA：最初は作文に溶け込んで隠れている状態 */
+  .draggable-word.hidden-idiom {
+    border-color: transparent;
+    background: transparent;
+    color: inherit;
+    font-weight: normal;
+    font-family: inherit;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+  }
+  .draggable-word:active { cursor: grabbing; transform: scale(1.05); }
+  .draggable-word.dragged-out {
+    opacity: 0;
+    pointer-events: none;
+  }
+  
+  /* Pattern B 埋め込みスロット */
+  .drop-slot.inline-drop-slot {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 1.8em;
+    min-width: 1.8em;
+    height: 3.6em;
+    border: 2px dashed #a8a29e;
+    border-radius: 6px;
+    margin: 4px -0.175em;
+    background: #f5f5f4;
+    color: transparent;
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+    vertical-align: middle;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+    padding: 4px 0;
+    line-height: 1.1;
+  }
+  .drop-slot.inline-drop-slot.drag-over {
+    border-color: #ef4444; background: #fef2f2; transform: scale(1.05);
+  }
+  .drop-slot.inline-drop-slot.filled {
+    border: 2px solid #22c55e;
+    border-radius: 6px;
+    background: #f0fdf4;
+    color: #15803d;
+    box-shadow: 0 0 10px rgba(34, 197, 94, 0.2);
+    width: 1.8em;
+    min-width: 1.8em;
+    height: auto;
+    padding: 6px 0;
+    margin: 2px -0.175em;
+    display: inline-flex;
+  }
+
+  /* ルビ非表示用クラス */
+  .hide-ruby rt {
+    visibility: hidden;
+  }
+
+  /* 右側：問題リスト (5行) */
+  #idiom-list {
+    flex: 1.2;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(6px, 1.2vw, 12px);
+    justify-content: center;
+    height: 100%;
+    min-width: 0;
+  }
+  .idiom-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #ffffff;
+    border: 1px solid #e7e5e4;
+    border-radius: 12px;
+    padding: clamp(6px, 1vw, 10px) clamp(10px, 1.5vw, 16px);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+    min-width: 0;
+    transition: background-color 0.3s, border-color 0.3s;
+  }
+  .idiom-row.completed {
+    background: #f0fdf4;
+    border-color: #86efac;
+  }
+  .meaning-text {
+    flex: 1;
+    color: #44403c;
+    font-size: clamp(12px, 1.3vw, 15px);
+    font-weight: 700;
+    padding-right: 12px;
+    line-height: 1.4;
+  }
+  .slot-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .drop-slot {
+    min-width: clamp(64px, 8.5vw, 105px);
+    width: auto;
+    padding: 0 12px;
+    height: clamp(38px, 4.8vw, 52px);
+    border: 2px dashed #a8a29e;
+    border-radius: 8px;
+    background: #f5f5f4;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+    font-size: clamp(15px, 1.9vw, 22px);
+    font-weight: bold;
+    color: transparent;
+    white-space: nowrap;
+  }
+  .drop-slot.drag-over {
+    border-color: #ef4444;
+    background: #fef2f2;
+    transform: scale(1.05);
+  }
+  .drop-slot.filled {
+    border-style: solid;
+    border-color: #22c55e;
+    background: #ffffff;
+    color: #15803d;
+    box-shadow: 0 0 10px rgba(34, 197, 94, 0.2);
+  }
+  
+  .hint-btn {
+    width: clamp(32px, 3.5vw, 44px);
+    height: clamp(32px, 3.5vw, 44px);
+    border-radius: 8px;
+    background: #fef08a;
+    border: 1px solid #fde047;
+    color: #a16207;
+    font-size: clamp(10px, 1vw, 12px);
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-left: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+  .hint-btn:hover { background: #fde047; transform: translateY(-1px); }
+  .hint-btn.used { background: #f5f5f4; border-color: #e7e5e4; color: #a8a29e; cursor: default; }
+
+  /* ドラッグ中のクローン */
+  .touch-drag-clone {
+    position: fixed;
+    z-index: 1000;
+    pointer-events: none;
+    box-shadow: 0 10px 25px rgba(220, 38, 38, 0.4);
+    transform: scale(1.1);
+    background: #ffffff;
+    border: 2px solid #ef4444;
+    border-radius: 6px;
+    padding: 4px 8px;
+    color: #991b1b;
+    font-weight: bold;
+    font-size: clamp(16px, 2vw, 24px);
+    writing-mode: horizontal-tb;
+    white-space: nowrap;
+    width: auto !important;
+    height: auto !important;
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .shake-animation {
+    animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+  }
+  @keyframes shake {
+    10%, 90% { transform: translate3d(-2px, 0, 0); }
+    20%, 80% { transform: translate3d(3px, 0, 0); }
+    30%, 50%, 70% { transform: translate3d(-5px, 0, 0); }
+    40%, 60% { transform: translate3d(5px, 0, 0); }
+  }
+
+  /* モーダル等 */
+  .modal-overlay {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(10, 0, 0, 0.85); backdrop-filter: blur(6px);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 100; animation: fadeIn 0.3s ease-out;
+  }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .start-hero-card {
+    background: linear-gradient(135deg, #2a0a0a, #450a0a);
+    border: 2px solid #ef4444;
+    color: #ffffff;
+    padding: 32px;
+    border-radius: 24px;
+    text-align: center;
+    box-shadow: 0 20px 50px rgba(220, 38, 38, 0.4), inset 0 0 20px rgba(239, 68, 68, 0.2);
+    max-width: 480px; width: 90%;
+  }
+  .start-hero-title {
+    font-size: clamp(32px, 5vw, 44px);
+    font-weight: 900; letter-spacing: 2px;
+    color: #fca5a5; text-shadow: 0 0 20px rgba(239, 68, 68, 0.8);
+    margin-bottom: 12px;
+  }
+  .start-play-btn {
+    background: linear-gradient(135deg, #ef4444, #b91c1c);
+    color: #ffffff; font-size: 18px; font-weight: 800;
+    padding: 14px 48px; border: none; border-radius: 30px;
+    cursor: pointer;
+    box-shadow: 0 10px 25px rgba(220, 38, 38, 0.5);
+    transition: all 0.2s; letter-spacing: 1px;
+  }
+  .start-play-btn:hover { transform: scale(1.05); box-shadow: 0 12px 30px rgba(239, 68, 68, 0.7); }
+
+  .stage-clear-banner {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #ffffff; padding: 24px 32px; border-radius: 20px;
+    text-align: center; box-shadow: 0 15px 30px rgba(16, 185, 129, 0.4);
+    animation: bounceIn 0.5s;
+  }
+  @keyframes bounceIn {
+    0% { transform: scale(0.3); opacity: 0; }
+    50% { transform: scale(1.05); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* ステージズーム */
+  #stage-zoom-overlay {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(10, 0, 0, 0.9); display: flex; justify-content: center; align-items: center;
+    z-index: 200; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  #stage-zoom-overlay.show { opacity: 1; pointer-events: auto; }
+  .stage-zoom-text {
+    font-size: clamp(32px, 8vw, 80px); font-weight: 900; font-style: italic;
+    color: #fca5a5; text-shadow: 0 0 30px rgba(239, 68, 68, 0.8);
+    transform: scale(0);
+  }
+  .stage-zoom-text.animate { animation: stageZoomIn 1s forwards; }
+  @keyframes stageZoomIn {
+    0% { transform: scale(0.1); opacity: 0; }
+    50% { transform: scale(1.1); opacity: 1; }
+    80% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1.05); opacity: 0; }
+  }
+
+  /* オノマトペ特別ステージ */
+  .special-stage-container {
+    background: linear-gradient(135deg, #172554, #1e3a8a);
+    border: 2px solid #60a5fa; border-radius: 20px;
+    padding: 20px; width: 94%; max-width: 900px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.8), 0 0 30px rgba(96, 165, 250, 0.3);
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+  }
+  .special-header {
+    width: 100%; display: flex; justify-content: space-between; align-items: center;
+    color: #fff; border-bottom: 1px solid #3b82f6; padding-bottom: 8px;
+  }
+  .special-title { font-size: 20px; font-weight: 900; color: #fde047; }
+  .special-timer { font-size: 20px; font-weight: bold; color: #fca5a5; }
+  .special-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    width: 100%; max-width: 800px;
+  }
+  .ono-card {
+    background: #ffffff; border: 2px solid #cbd5e1; border-radius: 12px;
+    padding: 12px; text-align: center; cursor: pointer; color: #1e293b;
+    font-weight: bold; font-size: clamp(14px, 1.8vw, 18px);
+    transition: all 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  }
+  .ono-card:hover { transform: scale(1.02); border-color: #3b82f6; }
+  .ono-card.selected { background: #eff6ff; border-color: #2563eb; box-shadow: 0 0 12px rgba(59, 130, 246, 0.5); }
+  .ono-card.matched { pointer-events: none; opacity: 0.95; }
+  .ono-card.matched-0 { background: #dcfce7; border-color: #22c55e; color: #15803d; }
+  .ono-card.matched-1 { background: #dbeafe; border-color: #3b82f6; color: #1d4ed8; }
+  .ono-card.matched-2 { background: #f3e8ff; border-color: #a855f7; color: #7e22ce; }
+  .ono-card.matched-3 { background: #ffedd5; border-color: #f97316; color: #c2410c; }
+  .ono-card.error { animation: shake 0.3s; background: #fee2e2; border-color: #ef4444; color: #b91c1c; }
+  
+  #confetti-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 90; }
+</style>
+</head>
+<body>
+
+<div id="game-container">
+  <canvas id="confetti-canvas"></canvas>
+  <div id="track-container"></div>
+
+  <div id="stage-zoom-overlay">
+    <div id="stage-zoom-text" class="stage-zoom-text">STAGE 1</div>
+  </div>
+
+  <div id="main-content">
+    <div id="header">
+      <div class="header-left">
+        <div class="stat-box" id="stage-display">🚩 STAGE 1 (1/3)</div>
+        <div class="stat-box" id="points-display">⭐ 0 pt</div>
+        <button class="btn-ui" id="ruby-btn" onclick="toggleRuby()">ふりがな: OFF</button>
+      </div>
+      <div class="header-left">
+        <div class="stat-box" id="timer-display">⏱ 90</div>
+        <button class="btn-ui" id="sound-btn" onclick="toggleSound()">🔊 ON</button>
+      </div>
+    </div>
+
+    <div id="workspace">
+      <!-- 左：作文エリア -->
+      <div id="composition-container">
+        <div class="comp-title" id="comp-title-text">▼ わくの言葉を右にスワイプしてね ▼</div>
+        <div id="composition-area"></div>
+      </div>
+
+      <!-- 右：問題リスト -->
+      <div id="idiom-list"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 長押しによる右クリックメニューや、ダブルタップによる誤作動を画面全体で無効化
+document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('dblclick', e => e.preventDefault());
+
+// --- データベース ---
+const IDIOM_DATABASE = [
+  { word: "青空", reading: "あおぞら", meaning: "青くすんで晴れわたった空" },
+  { word: "朝日", reading: "あさひ", meaning: "朝、のぼってくる太よう" },
+  { word: "暗算", reading: "あんざん", meaning: "頭の中で計算すること" },
+  { word: "案内", reading: "あんない", meaning: "場所やようすを教えてみちびくこと" },
+  { word: "意見", reading: "いけん", meaning: "自分の考えや思い" },
+  { word: "意味", reading: "いみ", meaning: "言葉や行どうのあらわす内よう" },
+  { word: "歌手", reading: "かしゅ", meaning: "歌を歌うことをしごとにする人" },
+  { word: "海岸", reading: "かいがん", meaning: "海にめんしたりく地" },
+  { word: "会話", reading: "かいわ", meaning: "二人い上でおしゃべりすること" },
+  { word: "外国", reading: "がいこく", meaning: "自分の国ではない国" },
+  { word: "兄弟", reading: "きょうだい", meaning: "兄・弟・姉・妹の間がら" },
+  { word: "教室", reading: "きょうしつ", meaning: "学校でべん強をするへや" },
+  { word: "計画", reading: "けいかく", meaning: "あらかじめ立てる手じゅんやよてい" },
+  { word: "見学", reading: "けんがく", meaning: "じっさいに見て学ぶこと" },
+  { word: "工作", reading: "こうさく", meaning: "ざいりょうをつかってものを作ること" },
+  { word: "工場", reading: "こうじょう", meaning: "せいひんやきかいを作る場所" },
+  { word: "交通", reading: "こうつう", meaning: "人や車が行き来すること" },
+  { word: "公園", reading: "こうえん", meaning: "みんながあそんだり休んだりする広場" },
+  { word: "国語", reading: "こくご", meaning: "自分の国の言葉。教科の名前" },
+  { word: "今夜", reading: "こんや", meaning: "今日の夜" },
+  { word: "作文", reading: "さくぶん", meaning: "自分の考えやけいけんを書いた文しょう" },
+  { word: "算数", reading: "さんすう", meaning: "数や計算を学ぶ教科" },
+  { word: "市長", reading: "しちょう", meaning: "市をだいひょうしてまとめる人" },
+  { word: "時間", reading: "じかん", meaning: "時のけいか。時計がしめす時こく" },
+  { word: "自習", reading: "じしゅう", meaning: "自分ですすんでべん強すること" },
+  { word: "質問", reading: "しつもん", meaning: "分からないことをたずねること" },
+  { word: "写真", reading: "しゃしん", meaning: "カメラで風けいや人をうつしたもの" },
+  { word: "社会", reading: "しゃかい", meaning: "人びとがあつまって作るよの中" },
+  { word: "手帳", reading: "てちょう", meaning: "メモやよていを書く小さなノート" },
+  { word: "遠足", reading: "えんそく", meaning: "歩いてけしきのよい場所へ行く行じ" },
+  { word: "読書", reading: "どくしょ", meaning: "本を読むこと" },
+  { word: "音楽", reading: "おんがく", meaning: "歌や楽きの音によるげいじゅつ" },
+  { word: "親子", reading: "おやこ", meaning: "親と子どもの間がら" },
+  { word: "友達", reading: "ともだち", meaning: "なかがよいなかま" },
+  { word: "夜空", reading: "よぞら", meaning: "夜の空" },
+  { word: "広場", reading: "ひろば", meaning: "みんながあつまれる広い場所" },
+  { word: "勉強", reading: "べんきょう", meaning: "知しきやぎのうをみにつけること" },
+  { word: "宿題", reading: "しゅくだい", meaning: "家でやってくるように出されるべん強" },
+  { word: "掃除", reading: "そうじ", meaning: "へやをきれいにすること" },
+  { word: "発表", reading: "はっぴょう", meaning: "自分の考えやしらべたことをつたえること" },
+  { word: "探検", reading: "たんけん", meaning: "知らない場所をしらべて歩くこと" },
+  { word: "正解", reading: "せいかい", meaning: "正しい答え" },
+  { word: "雨雲", reading: "あまぐも", meaning: "雨をふらせる黒っぽい雲" },
+  { word: "赤字", reading: "あかじ", meaning: "赤色の文字やりえきが出ないこと" },
+  { word: "日記", reading: "にっき", meaning: "毎日の出来ごとを書く記ろく" },
+  { word: "太陽", reading: "たいよう", meaning: "昼間、空にかがやく大きな星" },
+  { word: "台風", reading: "たいふう", meaning: "強い風と大雨をもたらすあらし" },
+  { word: "花火", reading: "はなび", meaning: "夜空にうち上げてきれいな光をはなつ火やく" },
+  { word: "時計", reading: "とけい", meaning: "時間をはかる道ぐ" },
+  { word: "電車", reading: "でんしゃ", meaning: "電気の力で線ろを走るのりもの" },
+  { word: "電話", reading: "でんわ", meaning: "遠くの人と声で話す道ぐ" },
+  { word: "電気", reading: "でんき", meaning: "明かりをつけたりきかいをうごかすエネルギー" },
+  { word: "野菜", reading: "やさい", meaning: "はたけでそだてる食べられるしょくぶつ" },
+  { word: "体育", reading: "たいいく", meaning: "体をうごかしてうんどうするじゅぎょう" },
+  { word: "図工", reading: "ずこう", meaning: "絵や工作のじゅぎょう" },
+  { word: "早起き", reading: "はやおき", meaning: "朝早くおきること" },
+  { word: "王様", reading: "おうさま", meaning: "国をおさめる一番えらい人" },
+  { word: "切手", reading: "きって", meaning: "手紙を出すときにはるお金のかわりの紙" },
+  { word: "首輪", reading: "くびわ", meaning: "犬やねこの首につけるわ" },
+  { word: "青葉", reading: "あおば", meaning: "春から夏にかけてしげるみどりのは" },
+  { word: "石垣", reading: "いしがき", meaning: "石をつみ上げて作ったかきね" },
+  { word: "一番", reading: "いちばん", meaning: "じゅんじょやだんかいがもっとも上であること" },
+  { word: "衣服", reading: "いふく", meaning: "みにつけるきもの" },
+  { word: "色紙", reading: "いろがみ", meaning: "いろいろな色のついた紙" },
+  { word: "汽笛", reading: "きてき", meaning: "船やじょう気きかん車が鳴らすふえ" },
+  { word: "黒板", reading: "こくばん", meaning: "教室の前にあるチョークで書くいた" },
+  { word: "小麦", reading: "こむぎ", meaning: "パンやうどんのざいりょうになるこくもつ" },
+  { word: "竹林", reading: "ちくりん", meaning: "竹がたくさん生えている場所" },
+  { word: "年上", reading: "としうえ", meaning: "自分より年れいが上の人" },
+  { word: "年下", reading: "としした", meaning: "自分より年れいが下の人" },
+  { word: "虫捕り", reading: "むしとり", meaning: "こん虫をつかまえること" },
+  { word: "昔話", reading: "むかしばなし", meaning: "むかしから語りつがれているお話" },
+  { word: "算盤", reading: "そろばん", meaning: "玉をうごかして計算する道ぐ" },
+  { word: "春休み", reading: "はるやすみ", meaning: "しんきゅうする前にある春の休み" },
+  { word: "夏休み", reading: "なつやすみ", meaning: "夏の間にある長い休み" },
+  { word: "冬休み", reading: "ふゆやすみ", meaning: "年まつ年しにある休み" },
+  { word: "朝顔", reading: "あさがお", meaning: "夏にラッパ形の花をさかせるしょくぶつ" },
+  { word: "画用紙", reading: "がようし", meaning: "絵をえがくためのぶあつい紙" },
+  { word: "新幹線", reading: "しんかんせん", meaning: "とてもはやく走る日本の電車" },
+  { word: "水族館", reading: "すいぞくかん", meaning: "海の生きものをてんじするしせつ" },
+  { word: "図書館", reading: "としょかん", meaning: "たくさんの本があってかりられる場所" },
+  { word: "小学校", reading: "しょうがっこう", meaning: "６年間通ってべん強する学校" },
+  { word: "中学校", reading: "ちゅうがっこう", meaning: "小学校のつぎに行く学校" },
+  { word: "動物園", reading: "どうぶつえん", meaning: "たくさんのどうぶつを見られる場所" },
+  { word: "植物園", reading: "しょくぶつえん", meaning: "めずらしい花や木をそだてる場所" },
+  { word: "運動会", reading: "うんどうかい", meaning: "走ったりおどったりする学校の行じ" },
+  { word: "文房具", reading: "ぶんぼうぐ", meaning: "えんぴつやノートなどのべん強の道ぐ" },
+  { word: "青信号", reading: "あおしんごう", meaning: "すすんでもよいことをしめすしんごう" },
+  { word: "赤信号", reading: "あかしんごう", meaning: "止まらなければいけないしんごう" },
+  { word: "正月", reading: "しょうがつ", meaning: "１月１日を中心とする新しい年のおいわい" },
+  { word: "春夏秋冬", reading: "しゅんかしゅうとう", meaning: "春・夏・秋・冬の四つのきせつ" },
+  { word: "自動車", reading: "じどうしゃ", meaning: "エンジンやモーターでうごく車" },
+  { word: "糸車", reading: "いとぐるま", meaning: "糸をつむぐむかしの道ぐ" },
+  { word: "休日", reading: "きゅうじつ", meaning: "学校やしごとが休みの日" },
+  { word: "手紙", reading: "てがみ", meaning: "ようじや気持ちを書いておくもの" },
+  { word: "新聞", reading: "しんぶん", meaning: "まい日のニュースをしらせる読みもの" }
+];
+
+const PRESET_COMPOSITIONS = [
+  { words: ["教室", "算数", "黒板", "暗算", "正解"], html: "きょうは<span class=\"draggable-word\" data-word=\"教室\"><ruby>教室<rt>きょうしつ</rt></ruby></span>で、<span class=\"draggable-word\" data-word=\"算数\"><ruby>算数<rt>さんすう</rt></ruby></span>のテストがありました。<span class=\"draggable-word\" data-word=\"黒板\"><ruby>黒板<rt>こくばん</rt></ruby></span>に書かれたもんだいを、がんばって<span class=\"draggable-word\" data-word=\"暗算\"><ruby>暗算<rt>あんざん</rt></ruby></span>でといて、ぜんぶ<span class=\"draggable-word\" data-word=\"正解\"><ruby>正解<rt>せいかい</rt></ruby></span>できてうれしかったです。" },
+  { words: ["青空", "公園", "友達", "虫捕り", "時計"], html: "きれいな<span class=\"draggable-word\" data-word=\"青空\"><ruby>青空<rt>あおぞら</rt></ruby></span>の下、<span class=\"draggable-word\" data-word=\"公園\"><ruby>公園<rt>こうえん</rt></ruby></span>で<span class=\"draggable-word\" data-word=\"友達\"><ruby>友達<rt>ともだち</rt></ruby></span>とあそびました。<span class=\"draggable-word\" data-word=\"虫捕り\"><ruby>虫捕り<rt>むしとり</rt></ruby></span>にむちゅうになっていたら、<span class=\"draggable-word\" data-word=\"時計\"><ruby>時計<rt>とけい</rt></ruby></span>が夕方をしめしていました。" },
+  { words: ["夏休み", "早起き", "青葉", "朝顔", "日記"], html: "<span class=\"draggable-word\" data-word=\"夏休み\"><ruby>夏休み<rt>なつやすみ</rt></ruby></span>は毎日<span class=\"draggable-word\" data-word=\"早起き\"><ruby>早起き<rt>はやおき</rt></ruby></span>をしています。にわの<span class=\"draggable-word\" data-word=\"青葉\"><ruby>青葉<rt>あおば</rt></ruby></span>がしげる中で、<span class=\"draggable-word\" data-word=\"朝顔\"><ruby>朝顔<rt>あさがお</rt></ruby></span>の花がさいたことを<span class=\"draggable-word\" data-word=\"日記\"><ruby>日記<rt>にっき</rt></ruby></span>に書きました。" },
+  { words: ["遠足", "新幹線", "親子", "水族館", "写真"], html: "<span class=\"draggable-word\" data-word=\"親子\"><ruby>親子<rt>おやこ</rt></ruby></span>の<span class=\"draggable-word\" data-word=\"遠足\"><ruby>遠足<rt>えんそく</rt></ruby></span>で、<span class=\"draggable-word\" data-word=\"新幹線\"><ruby>新幹線<rt>しんかんせん</rt></ruby></span>にのって<span class=\"draggable-word\" data-word=\"水族館\"><ruby>水族館<rt>すいぞくかん</rt></ruby></span>へ行きました。大きなお魚の<span class=\"draggable-word\" data-word=\"写真\"><ruby>写真<rt>しゃしん</rt></ruby></span>をたくさんとりました。" },
+  { words: ["今夜", "広場", "音楽", "夜空", "花火"], html: "<span class=\"draggable-word\" data-word=\"今夜\"><ruby>今夜<rt>こんや</rt></ruby></span>は町内の<span class=\"draggable-word\" data-word=\"広場\"><ruby>広場<rt>ひろば</rt></ruby></span>で、楽しい<span class=\"draggable-word\" data-word=\"音楽\"><ruby>音楽<rt>おんがく</rt></ruby></span>をききながらあそびました。<span class=\"draggable-word\" data-word=\"夜空\"><ruby>夜空<rt>よぞら</rt></ruby></span>には、きれいな<span class=\"draggable-word\" data-word=\"花火\"><ruby>花火<rt>はなび</rt></ruby></span>がたくさんあがりました。" },
+  { words: ["図工", "画用紙", "工作", "発表", "一番"], html: "<span class=\"draggable-word\" data-word=\"図工\"><ruby>図工<rt>ずこう</rt></ruby></span>の時間に、大きな<span class=\"draggable-word\" data-word=\"画用紙\"><ruby>画用紙<rt>がようし</rt></ruby></span>をつかって<span class=\"draggable-word\" data-word=\"工作\"><ruby>工作<rt>こうさく</rt></ruby></span>をしました。みんなの前で<span class=\"draggable-word\" data-word=\"発表\"><ruby>発表<rt>はっぴょう</rt></ruby></span>をしたとき、ぼくのさくひんが<span class=\"draggable-word\" data-word=\"一番\"><ruby>一番<rt>いちばん</rt></ruby></span>かっこよかったです。" },
+  { words: ["雨雲", "台風", "電気", "宿題", "読書"], html: "空に黒い<span class=\"draggable-word\" data-word=\"雨雲\"><ruby>雨雲<rt>あまぐも</rt></ruby></span>が広がり、<span class=\"draggable-word\" data-word=\"台風\"><ruby>台風<rt>たいふう</rt></ruby></span>が近づいています。部屋の<span class=\"draggable-word\" data-word=\"電気\"><ruby>電気<rt>でんき</rt></ruby></span>をつけて、<span class=\"draggable-word\" data-word=\"宿題\"><ruby>宿題<rt>しゅくだい</rt></ruby></span>を終わらせてから<span class=\"draggable-word\" data-word=\"読書\"><ruby>読書<rt>どくしょ</rt></ruby></span>をしました。" },
+  { words: ["国語", "見学", "工場", "作文", "意味"], html: "<span class=\"draggable-word\" data-word=\"国語\"><ruby>国語<rt>こくご</rt></ruby></span>のじゅぎょうで、きのう<span class=\"draggable-word\" data-word=\"見学\"><ruby>見学<rt>けんがく</rt></ruby></span>に行った<span class=\"draggable-word\" data-word=\"工場\"><ruby>工場<rt>こうじょう</rt></ruby></span>についての<span class=\"draggable-word\" data-word=\"作文\"><ruby>作文<rt>さくぶん</rt></ruby></span>を書きました。むずかしい言葉の<span class=\"draggable-word\" data-word=\"意味\"><ruby>意味<rt>いみ</rt></ruby></span>も、じしょでしらべました。" },
+  { words: ["正月", "兄弟", "手帳", "春夏秋冬", "計画"], html: "<span class=\"draggable-word\" data-word=\"正月\"><ruby>正月<rt>しょうがつ</rt></ruby></span>に、<span class=\"draggable-word\" data-word=\"兄弟\"><ruby>兄弟<rt>きょうだい</rt></ruby></span>で今年のめあてを決めました。新しい<span class=\"draggable-word\" data-word=\"手帳\"><ruby>手帳<rt>てちょう</rt></ruby></span>に、<span class=\"draggable-word\" data-word=\"春夏秋冬\"><ruby>春夏秋冬<rt>しゅんかしゅうとう</rt></ruby></span>ごとの楽しい<span class=\"draggable-word\" data-word=\"計画\"><ruby>計画<rt>けいかく</rt></ruby></span>をたくさん書きました。" },
+  { words: ["自動車", "交通", "赤信号", "青信号", "案内"], html: "まちにはたくさんの<span class=\"draggable-word\" data-word=\"自動車\"><ruby>自動車<rt>じどうしゃ</rt></ruby></span>が走り、<span class=\"draggable-word\" data-word=\"交通\"><ruby>交通<rt>こうつう</rt></ruby></span>の量が多いです。道をわたるときは、<span class=\"draggable-word\" data-word=\"赤信号\"><ruby>赤信号<rt>あかしんごう</rt></ruby></span>で止まり、<span class=\"draggable-word\" data-word=\"青信号\"><ruby>青信号<rt>あおしんごう</rt></ruby></span>になってからすすむよう、先生が<span class=\"draggable-word\" data-word=\"案内\"><ruby>案内<rt>あんない</rt></ruby></span>してくれました。" },
+  { words: ["図書館", "外国", "動物園", "質問", "会話"], html: "<span class=\"draggable-word\" data-word=\"図書館\"><ruby>図書館<rt>としょかん</rt></ruby></span>で、<span class=\"draggable-word\" data-word=\"外国\"><ruby>外国<rt>がいこく</rt></ruby></span>の<span class=\"draggable-word\" data-word=\"動物園\"><ruby>動物園<rt>どうぶつえん</rt></ruby></span>についての本を読みました。わからないことがあったので、先生に<span class=\"draggable-word\" data-word=\"質問\"><ruby>質問<rt>しつもん</rt></ruby></span>して、楽しく<span class=\"draggable-word\" data-word=\"会話\"><ruby>会話<rt>かいわ</rt></ruby></span>をしました。" },
+  { words: ["体育", "運動会", "一番", "友達", "時間"], html: "<span class=\"draggable-word\" data-word=\"体育\"><ruby>体育<rt>たいいく</rt></ruby></span>の時間に、<span class=\"draggable-word\" data-word=\"運動会\"><ruby>運動会<rt>うんどうかい</rt></ruby></span>の練習をしました。かけっこで<span class=\"draggable-word\" data-word=\"一番\"><ruby>一番<rt>いちばん</rt></ruby></span>になれるように、<span class=\"draggable-word\" data-word=\"友達\"><ruby>友達<rt>ともだち</rt></ruby></span>といっしょに放課後の<span class=\"draggable-word\" data-word=\"時間\"><ruby>時間<rt>じかん</rt></ruby></span>も走りました。" },
+  { words: ["植物園", "朝顔", "青葉", "手帳", "日記"], html: "日曜日に、家族で<span class=\"draggable-word\" data-word=\"植物園\"><ruby>植物園<rt>しょくぶつえん</rt></ruby></span>へ行きました。<span class=\"draggable-word\" data-word=\"朝顔\"><ruby>朝顔<rt>あさがお</rt></ruby></span>やきれいな<span class=\"draggable-word\" data-word=\"青葉\"><ruby>青葉<rt>あおば</rt></ruby></span>をみて、気づいたことを<span class=\"draggable-word\" data-word=\"手帳\"><ruby>手帳<rt>てちょう</rt></ruby></span>にメモして、あとで<span class=\"draggable-word\" data-word=\"日記\"><ruby>日記<rt>にっき</rt></ruby></span>にまとめました。" },
+  { words: ["竹林", "虫捕り", "昔話", "探検", "自習"], html: "山の<span class=\"draggable-word\" data-word=\"竹林\"><ruby>竹林<rt>ちくりん</rt></ruby></span>へ、おじいちゃんと<span class=\"draggable-word\" data-word=\"虫捕り\"><ruby>虫捕り<rt>むしとり</rt></ruby></span>に行きました。まるで<span class=\"draggable-word\" data-word=\"昔話\"><ruby>昔話<rt>むかしばなし</rt></ruby></span>の世界を<span class=\"draggable-word\" data-word=\"探検\"><ruby>探検<rt>たんけん</rt></ruby></span>しているみたいで、学校の<span class=\"draggable-word\" data-word=\"自習\"><ruby>自習<rt>じしゅう</rt></ruby></span>よりもワクワクしました。" },
+  { words: ["石垣", "王様", "衣服", "市長", "意見"], html: "大きな<span class=\"draggable-word\" data-word=\"石垣\"><ruby>石垣<rt>いしがき</rt></ruby></span>があるお城で、えらい<span class=\"draggable-word\" data-word=\"王様\"><ruby>王様<rt>おうさま</rt></ruby></span>のような<span class=\"draggable-word\" data-word=\"衣服\"><ruby>衣服<rt>いふく</rt></ruby></span>を着た<span class=\"draggable-word\" data-word=\"市長\"><ruby>市長<rt>しちょう</rt></ruby></span>さんがお話をしていました。みんなが真剣に<span class=\"draggable-word\" data-word=\"意見\"><ruby>意見<rt>いけん</rt></ruby></span>をきいていました。" },
+  { words: ["歌手", "音楽", "発表", "友達", "一番"], html: "<span class=\"draggable-word\" data-word=\"音楽\"><ruby>音楽<rt>おんがく</rt></ruby></span>のじかんに、<span class=\"draggable-word\" data-word=\"歌手\"><ruby>歌手<rt>かしゅ</rt></ruby></span>になったつもりで<span class=\"draggable-word\" data-word=\"発表\"><ruby>発表<rt>はっぴょう</rt></ruby></span>をしたら、<span class=\"draggable-word\" data-word=\"友達\"><ruby>友達<rt>ともだち</rt></ruby></span>のなかで<span class=\"draggable-word\" data-word=\"一番\"><ruby>一番<rt>いちばん</rt></ruby></span>うまかったです。" },
+  { words: ["遠足", "海岸", "太陽", "汽笛", "切手"], html: "きょうの<span class=\"draggable-word\" data-word=\"遠足\"><ruby>遠足<rt>えんそく</rt></ruby></span>は<span class=\"draggable-word\" data-word=\"海岸\"><ruby>海岸<rt>かいがん</rt></ruby></span>へ行きました。<span class=\"draggable-word\" data-word=\"太陽\"><ruby>太陽<rt>たいよう</rt></ruby></span>の下で船の<span class=\"draggable-word\" data-word=\"汽笛\"><ruby>汽笛<rt>きてき</rt></ruby></span>をきき、おみやげにふうけいの<span class=\"draggable-word\" data-word=\"切手\"><ruby>切手<rt>きって</rt></ruby></span>を買いました。" },
+  { words: ["社会", "見学", "自動車", "工場", "質問"], html: "<span class=\"draggable-word\" data-word=\"社会\"><ruby>社会<rt>しゃかい</rt></ruby></span>のじゅぎょうで、<span class=\"draggable-word\" data-word=\"自動車\"><ruby>自動車<rt>じどうしゃ</rt></ruby></span>の<span class=\"draggable-word\" data-word=\"工場\"><ruby>工場<rt>こうじょう</rt></ruby></span>へ<span class=\"draggable-word\" data-word=\"見学\"><ruby>見学<rt>けんがく</rt></ruby></span>に行き、わくわくしてたくさん<span class=\"draggable-word\" data-word=\"質問\"><ruby>質問<rt>しつもん</rt></ruby></span>をしました。" },
+  { words: ["勉強", "宿題", "図書館", "読書", "時間"], html: "学校の<span class=\"draggable-word\" data-word=\"勉強\"><ruby>勉強<rt>べんきょう</rt></ruby></span>と<span class=\"draggable-word\" data-word=\"宿題\"><ruby>宿題<rt>しゅくだい</rt></ruby></span>を早くおわらせて、<span class=\"draggable-word\" data-word=\"図書館\"><ruby>図書館<rt>としょかん</rt></ruby></span>でゆっくり<span class=\"draggable-word\" data-word=\"読書\"><ruby>読書<rt>どくしょ</rt></ruby></span>をする<span class=\"draggable-word\" data-word=\"時間\"><ruby>時間<rt>じかん</rt></ruby></span>を作りました。" },
+  { words: ["正月", "新幹線", "親子", "兄弟", "昔話"], html: "<span class=\"draggable-word\" data-word=\"正月\"><ruby>正月<rt>しょうがつ</rt></ruby></span>に、<span class=\"draggable-word\" data-word=\"新幹線\"><ruby>新幹線<rt>しんかんせん</rt></ruby></span>にのっておばあちゃんの家へ行きました。<span class=\"draggable-word\" data-word=\"親子\"><ruby>親子<rt>おやこ</rt></ruby></span>や<span class=\"draggable-word\" data-word=\"兄弟\"><ruby>兄弟<rt>きょうだい</rt></ruby></span>で、おもしろい<span class=\"draggable-word\" data-word=\"昔話\"><ruby>昔話<rt>むかしばなし</rt></ruby></span>をききました。" },
+  { words: ["海岸", "遠足", "汽笛", "切手", "手紙"], html: "<span class=\"draggable-word\" data-word=\"海岸\"><ruby>海岸<rt>かいがん</rt></ruby></span>への<span class=\"draggable-word\" data-word=\"遠足\"><ruby>遠足<rt>えんそく</rt></ruby></span>で、船の<span class=\"draggable-word\" data-word=\"汽笛\"><ruby>汽笛<rt>きてき</rt></ruby></span>をききました。おみやげの<span class=\"draggable-word\" data-word=\"切手\"><ruby>切手<rt>きって</rt></ruby></span>をはって、おばあちゃんに<span class=\"draggable-word\" data-word=\"手紙\"><ruby>手紙<rt>てがみ</rt></ruby></span>を書きました。" }
+];
+
+const ONO_DATABASE = [
+  { word: "ぐんぐん", match: "のびる" }, { word: "しんしん", match: "ふりつもる" },
+  { word: "たっぷり", match: "ある" }, { word: "さらさら", match: "流れる" },
+  { word: "きらきら", match: "光る" }, { word: "どきどき", match: "むねがなる" },
+  { word: "わくわく", match: "きたいする" }, { word: "にこにこ", match: "笑う" },
+  { word: "しくしく", match: "泣く" }, { word: "ぽかぽか", match: "あたたかい" },
+  { word: "ぺこぺこ", match: "おなかがへる" }, { word: "ごくごく", match: "飲む" },
+  { word: "すやすや", match: "ねむる" }, { word: "ぴょんぴょん", match: "はねる" },
+  { word: "のそのそ", match: "歩く" }, { word: "ふわふわ", match: "うかぶ" },
+  { word: "ざあざあ", match: "雨がふる" }, { word: "ごろごろ", match: "かみなりがなる" },
+  { word: "ぴかぴか", match: "みがく" }, { word: "つるつる", match: "すべる" },
+  { word: "ぎゅっと", match: "にぎる" }, { word: "そっと", match: "おく" },
+  { word: "ぱくぱく", match: "食べる" }, { word: "もぐもぐ", match: "かむ" },
+  { word: "げらげら", match: "大わらいする" }, { word: "ぷんぷん", match: "おこる" },
+  { word: "めそめそ", match: "なみだを流す" }, { word: "くたくた", match: "つかれる" },
+  { word: "びしょびしょ", match: "ぬれる" }, { word: "からから", match: "かわく" },
+  { word: "ぐるぐる", match: "まわる" }, { word: "ゆらゆら", match: "ゆれる" },
+  { word: "すいすい", match: "およぐ" }, { word: "とことこ", match: "小ばしりする" },
+  { word: "ぺらぺら", match: "めくる" }, { word: "カチカチ", match: "こおる" },
+  { word: "ふわふわ", match: "やわらかい" }, { word: "ごつごつ", match: "かたい" },
+  { word: "ひそひそ", match: "小声で話す" }, { word: "ぺちゃくちゃ", match: "おしゃべりする" },
+  { word: "わんわん", match: "ほえる" }, { word: "にゃあにゃあ", match: "なく" },
+  { word: "ちゅんちゅん", match: "さえずる" }, { word: "ぶーん", match: "とぶ" },
+  { word: "ぱちぱち", match: "はくしゅする" }, { word: "どんどん", match: "たたく" },
+  { word: "りんりん", match: "すずがなる" }, { word: "じーっと", match: "見つめる" },
+  { word: "きょろきょろ", match: "あたりを見る" }, { word: "うとうと", match: "ねむくなる" }
+];
+
+// --- グローバル状態 ---
+let currentPosition = 0; // 0 〜 50
+let currentStage = 1;
+let currentSubStage = 1; // 1, 2, 3
+let totalPoints = 0;
+let stageWordPoints = 0;
+let subStagePoints = 0;
+let isPatternB = false;
+let timer = 90;
+let timerInterval = null;
+let soundEnabled = true;
+let isRubyHidden = true;
+
+let availableCompositions = [];
+let availableOnoList = [];
+let currentIdioms = [];
+let usedHintsInSubStage = [false, false, false, false, false];
+let audioCtx = null;
+
+let draggedWordElem = null;
+let touchClone = null;
+let touchStartX = 0, touchStartY = 0;
+
+function getNextComposition() {
+  if (availableCompositions.length === 0) {
+    availableCompositions = [...PRESET_COMPOSITIONS].sort(() => Math.random() - 0.5);
+  }
+  return availableCompositions.pop();
+}
+
+// --- トラック (すごろく) 初期化 ---
+function initTrack() {
+  const container = document.getElementById('game-container');
+  const trackContainer = document.getElementById('track-container');
+  trackContainer.innerHTML = '';
+  
+  const rect = container.getBoundingClientRect();
+  const containerW = rect.width || 1200;
+  const containerH = rect.height || 675;
+  const marginX = 26, marginY = 26;
+  const trackW = containerW - marginX * 2, trackH = containerH - marginY * 2;
+  const totalPerimeter = 2 * (trackW + trackH);
+  const totalTiles = 51;
+  const step = totalPerimeter / totalTiles;
+  const xStart = trackW * 0.52;
+
+  for (let i = 0; i < totalTiles; i++) {
+    const dist = i * step;
+    let x, y;
+    if (dist <= trackW - xStart) { x = xStart + dist; y = trackH; }
+    else if (dist <= (trackW - xStart) + trackH) { x = trackW; y = trackH - (dist - (trackW - xStart)); }
+    else if (dist <= (trackW - xStart) + trackH + trackW) { x = trackW - (dist - ((trackW - xStart) + trackH)); y = 0; }
+    else if (dist <= (trackW - xStart) + 2 * trackH + trackW) { x = 0; y = dist - ((trackW - xStart) + trackH + trackW); }
+    else { x = dist - ((trackW - xStart) + 2 * trackH + trackW); y = trackH; }
+
+    const pctX = ((x + marginX) / containerW) * 100;
+    const pctY = ((y + marginY) / containerH) * 100;
+
+    const tile = document.createElement('div');
+    tile.className = 'track-tile';
+    tile.id = `tile-${i}`;
+    tile.style.left = `${pctX}%`; tile.style.top = `${pctY}%`;
+    if (i === 0) { tile.classList.add('start-tile'); tile.innerText = 'START'; }
+    else if (i === 50) { tile.classList.add('goal-tile'); tile.innerText = 'GOAL'; }
+    else { tile.innerText = i; }
+    
+    trackContainer.appendChild(tile);
+  }
+  updateTrackUI();
+}
+
+function updateTrackUI() {
+  for (let i = 0; i < 51; i++) {
+    const tile = document.getElementById(`tile-${i}`);
+    if (!tile) continue;
+    tile.classList.remove('active-red', 'active-orange');
+    
+    let isRed = i < currentPosition || (i === 50 && currentPosition >= 50);
+    let isOrange = (i === currentPosition && i > 0 && i < 50);
+
+    if (isRed) { tile.classList.add('active-red'); } 
+    else if (isOrange) { tile.classList.add('active-orange'); }
+  }
+}
+
+// --- ゲームフロー ---
+function startStage() {
+  stageWordPoints = 0;
+  currentSubStage = 1;
+  startSubStage();
+}
+
+function startSubStage() {
+  clearInterval(timerInterval);
+  timer = 90;
+  subStagePoints = 0;
+  isPatternB = (currentStage % 2 === 0);
+  usedHintsInSubStage = [false, false, false, false, false];
+  document.getElementById('timer-display').innerText = `⏱ ${timer}`;
+  document.getElementById('stage-display').innerText = `🚩 STAGE ${currentStage} (${currentSubStage}/3)`;
+
+  const compData = getNextComposition();
+  currentIdioms = compData.words.map(w => IDIOM_DATABASE.find(item => item.word === w)).filter(Boolean);
+  
+  // 順序をランダムに
+  currentIdioms.sort(() => Math.random() - 0.5);
+  
+  document.getElementById('comp-title-text').innerText = isPatternB ? "▼ 右の熟語を空らんに当てはめよう ▼" : "▼ 作文にかくれた熟語を見つけて右にスワイプ！ ▼";
+
+  renderProblemRows();
+  
+  const compArea = document.getElementById('composition-area');
+  
+  const loadContent = () => {
+    let htmlStr = compData.html;
+    if (isPatternB) {
+      htmlStr = htmlStr.replace(/<span class="draggable-word" data-word="([^"]+)">(.*?)<\/span>/g, '<span class="inline-drop-slot drop-slot" data-word="$1"></span>');
+    }
+    htmlStr = htmlStr.replace(/、/g, '、').replace(/。/g, '。');
+    
+    compArea.innerHTML = htmlStr;
+    
+    if (isRubyHidden) compArea.classList.add('hide-ruby');
+    else compArea.classList.remove('hide-ruby');
+    
+    if (isPatternB) {
+      compArea.querySelectorAll('.drop-slot').forEach(slot => {
+        slot.ondragover = e => { e.preventDefault(); slot.classList.add('drag-over'); };
+        slot.ondragleave = e => { slot.classList.remove('drag-over'); };
+        slot.ondrop = e => handleDrop(e, slot);
+      });
+    } else {
+      // ステージAは最初すべての熟語を隠す（かくれんぼ状態）
+      compArea.querySelectorAll('.draggable-word').forEach(w => {
+        w.classList.add('hidden-idiom');
+      });
+    }
+
+    setupDraggables();
+    
+    timerInterval = setInterval(() => {
+      timer--;
+      document.getElementById('timer-display').innerText = `⏱ ${timer}`;
+      if (timer <= 0) handleTimeUp();
+    }, 1000);
+  };
+
+  if (currentSubStage === 1) {
+    triggerStageZoomIn(`STAGE ${currentStage}`, loadContent);
+  } else {
+    loadContent();
+  }
+}
+
+function renderProblemRows() {
+  const list = document.getElementById('idiom-list');
+  list.innerHTML = '';
+  currentIdioms.forEach((item, rowIndex) => {
+    const row = document.createElement('div');
+    row.className = 'idiom-row';
+    row.id = `idiom-row-${rowIndex}`;
+
+    const meaning = document.createElement('div');
+    meaning.className = 'meaning-text';
+    meaning.innerText = item.meaning;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'slot-wrapper';
+
+    if (isPatternB) {
+      const wordElem = document.createElement('div');
+      wordElem.className = 'draggable-word';
+      wordElem.dataset.word = item.word;
+      wordElem.innerText = item.word;
+      wrapper.appendChild(wordElem);
+    } else {
+      const slot = document.createElement('div');
+      slot.className = 'drop-slot';
+      slot.dataset.word = item.word;
+      slot.dataset.rowIndex = rowIndex;
+      
+      slot.ondragover = e => { e.preventDefault(); slot.classList.add('drag-over'); };
+      slot.ondragleave = e => { slot.classList.remove('drag-over'); };
+      slot.ondrop = e => handleDrop(e, slot);
+      
+      wrapper.appendChild(slot);
+    }
+
+    const hintBtn = document.createElement('button');
+    hintBtn.className = 'hint-btn';
+    hintBtn.innerText = 'ヒント';
+    hintBtn.onclick = () => showHint(rowIndex, hintBtn, item.word);
+
+    row.appendChild(meaning);
+    row.appendChild(wrapper);
+    row.appendChild(hintBtn);
+    list.appendChild(row);
+  });
+}
+
+function showHint(rowIndex, btn, word) {
+  if (usedHintsInSubStage[rowIndex]) return;
+  usedHintsInSubStage[rowIndex] = true;
+  btn.classList.add('used');
+  btn.innerText = '使用済';
+  
+  let slot;
+  if (isPatternB) {
+    slot = document.querySelector(`.inline-drop-slot[data-word="${word}"]`);
+  } else {
+    slot = document.querySelector(`.drop-slot[data-word="${word}"]`);
+  }
+  
+  if (slot && !slot.classList.contains('filled')) {
+    if (isPatternB) {
+      slot.innerText = word[0];
+      slot.style.color = '#a8a29e';
+    } else {
+      const restSpaces = '\u3000'.repeat(Math.max(1, word.length - 1));
+      slot.innerHTML = `<span style="color: #a8a29e;">${word[0]}</span><span style="color: transparent;">${restSpaces}</span>`;
+    }
+  }
+  playSE('click');
+}
+
+// --- D&D 実装 ---
+function setupDraggables() {
+  const words = document.querySelectorAll('.draggable-word');
+  words.forEach(w => {
+    const revealWord = () => {
+      if (w.classList.contains('hidden-idiom')) {
+        w.classList.remove('hidden-idiom');
+        playSE('click');
+      }
+    };
+
+    // クリック（タップ）で発見して枠を表示
+    w.addEventListener('click', () => {
+      revealWord();
+    });
+
+    // マウスで掴んだ瞬間にも発見して枠を表示
+    w.addEventListener('mousedown', () => {
+      revealWord();
+    });
+
+    w.draggable = true;
+    w.ondragstart = (e) => {
+      revealWord();
+      draggedWordElem = w;
+      e.dataTransfer.setData('text/plain', w.dataset.word);
+      playSE('click');
+    };
+    w.ondragend = () => { draggedWordElem = null; };
+
+    // Touch
+    w.addEventListener('touchstart', (e) => {
+      if (e.touches.length > 1) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      // 隠れていた場合はタップした瞬間に枠を表示！
+      revealWord();
+      
+      // 既存のクローンが残っていれば安全に掃除する
+      if (touchClone) {
+        touchClone.remove();
+        touchClone = null;
+      }
+      if (draggedWordElem) {
+        draggedWordElem.style.opacity = '1';
+      }
+
+      draggedWordElem = w;
+      playSE('click');
+      const touch = e.touches[0];
+      const rect = w.getBoundingClientRect();
+      
+      touchClone = w.cloneNode(true);
+      touchClone.className = 'touch-drag-clone';
+      touchClone.style.left = `${rect.left}px`;
+      touchClone.style.top = `${rect.top}px`;
+      document.body.appendChild(touchClone);
+      
+      touchStartX = touch.clientX - rect.left;
+      touchStartY = touch.clientY - rect.top;
+      w.style.opacity = '0.3';
+    }, {passive: false});
+
+    w.addEventListener('touchmove', (e) => {
+      if (!touchClone) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const touch = e.touches[0];
+      touchClone.style.left = `${touch.clientX - touchStartX}px`;
+      touchClone.style.top = `${touch.clientY - touchStartY}px`;
+      
+      document.querySelectorAll('.drop-slot').forEach(s => s.classList.remove('drag-over'));
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      const slot = el ? el.closest('.drop-slot') : null;
+      if (slot && !slot.classList.contains('filled')) slot.classList.add('drag-over');
+    }, {passive: false});
+
+    const resetTouchDrag = () => {
+      document.querySelectorAll('.drop-slot').forEach(s => s.classList.remove('drag-over'));
+      if (draggedWordElem) draggedWordElem.style.opacity = '1';
+      if (touchClone) touchClone.remove();
+      draggedWordElem = null;
+      touchClone = null;
+    };
+
+    w.addEventListener('touchend', (e) => {
+      if (!touchClone) return;
+      e.preventDefault();
+      const touch = e.changedTouches[0];
+      document.querySelectorAll('.drop-slot').forEach(s => s.classList.remove('drag-over'));
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      const slot = el ? el.closest('.drop-slot') : null;
+      
+      if (slot && !slot.classList.contains('filled') && draggedWordElem) {
+        const currentDragElem = draggedWordElem;
+        const currentClone = touchClone;
+        draggedWordElem = null;
+        touchClone = null;
+        processDrop(currentDragElem.dataset.word, slot, currentDragElem, currentClone);
+      } else {
+        resetTouchDrag();
+      }
+    });
+
+    w.addEventListener('touchcancel', () => {
+      resetTouchDrag();
+    });
+  });
+}
+
+function handleDrop(e, slot) {
+  e.preventDefault();
+  slot.classList.remove('drag-over');
+  if (slot.classList.contains('filled')) return;
+  const word = e.dataTransfer.getData('text/plain');
+  processDrop(word, slot, draggedWordElem, null);
+}
+
+function processDrop(word, slot, sourceElem, cloneElem) {
+  if (word === slot.dataset.word) {
+    // 正解
+    playSE('correct');
+    slot.classList.add('filled');
+    
+    if (isPatternB) {
+      const idiom = currentIdioms.find(i => i.word === word);
+      if (idiom) {
+        slot.innerHTML = `<ruby>${idiom.word}<rt>${isRubyHidden ? '' : idiom.reading}</rt></ruby>`;
+        if(isRubyHidden) slot.classList.add('hide-ruby');
+      }
+    } else {
+      slot.innerText = word;
+    }
+    
+    slot.style.color = '#15803d';
+    
+    if (sourceElem) sourceElem.classList.add('dragged-out');
+    if (cloneElem) cloneElem.remove();
+    
+    const rIndex = currentIdioms.findIndex(i => i.word === word);
+    if (rIndex !== -1) {
+      document.getElementById(`idiom-row-${rIndex}`).classList.add('completed');
+      const pts = usedHintsInSubStage[rIndex] ? 1 : 2;
+      subStagePoints += pts;
+    }
+    
+    checkAllCompleted();
+  } else {
+    // 不正解
+    playSE('wrong');
+    if (cloneElem) {
+      cloneElem.classList.add('shake-animation');
+      setTimeout(() => {
+        if(sourceElem) sourceElem.style.opacity = '1';
+        cloneElem.remove();
+      }, 400);
+    } else if (sourceElem) {
+      sourceElem.classList.add('shake-animation');
+      setTimeout(() => sourceElem.classList.remove('shake-animation'), 400);
+    }
+  }
+}
+
+async function checkAllCompleted() {
+  const slots = document.querySelectorAll('.drop-slot');
+  const allFilled = Array.from(slots).every(s => s.classList.contains('filled'));
+  
+  if (allFilled) {
+    clearInterval(timerInterval);
+    
+    const timePts = Math.max(0, timer);
+    const earnedPts = subStagePoints + timePts;
+    
+    playSE('milestone');
+    triggerConfetti();
+
+    // 正解した作文と解答をじっくり見られるように2秒待機
+    await new Promise(r => setTimeout(r, 2000));
+    
+    // 1. 先に外周のすごろくを進める
+    if (subStagePoints > 0) {
+      await advancePosition(subStagePoints);
+      // すごろくが完全に止まったのを確認してから少し待ってウィンドウを出す
+      await new Promise(r => setTimeout(r, 600));
+    }
+
+    // 2. 緑のクリアウィンドウを出す
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+      <div class="stage-clear-banner">
+        <h2 style="color: #fde047; font-size: 28px; margin-bottom: 12px;">💮 ${currentSubStage}問目 クリア！</h2>
+        <p style="font-size: 18px;">熟語正解: <strong>＋${subStagePoints} pt</strong></p>
+        <p style="font-size: 18px;">タイムボーナス: <strong>＋${timePts} pt</strong></p>
+        <hr style="margin: 12px 0; border-color: rgba(255,255,255,0.3);">
+        <h3 style="font-size: 24px;">合計 <strong>＋${earnedPts} pt</strong></h3>
+      </div>
+    `;
+    document.getElementById('game-container').appendChild(modal);
+
+    await new Promise(r => setTimeout(r, 2200));
+    modal.remove();
+
+    // 3. 最後にポイントを入れるアニメーションを実行し、完了後に次の問題へ進む
+    const targetPoints = totalPoints + earnedPts;
+    rollUpPoints(targetPoints, () => {
+      setTimeout(() => {
+        if (currentSubStage < 3) {
+          playSE('click');
+          currentSubStage++;
+          startSubStage();
+        } else {
+          startOnoStage();
+        }
+      }, 400);
+    });
+  }
+}
+
+// --- オノマトペ特別ステージ ---
+function startOnoStage() {
+  if (availableOnoList.length < 4) {
+    availableOnoList = [...ONO_DATABASE].sort(() => Math.random() - 0.5);
+  }
+  const pairs = [];
+  const usedWords = new Set();
+  const usedMatches = new Set();
+  
+  while (pairs.length < 4 && availableOnoList.length > 0) {
+    const item = availableOnoList.pop();
+    if (!usedWords.has(item.word) && !usedMatches.has(item.match)) {
+      pairs.push(item);
+      usedWords.add(item.word);
+      usedMatches.add(item.match);
+    }
+  }
+
+  let words = [], matches = [];
+  pairs.forEach(p => { words.push(p.word); matches.push({text: p.match, id: p.word}); });
+  
+  words.sort(() => Math.random() - 0.5);
+  matches.sort(() => Math.random() - 0.5);
+  
+  let selectedWord = null;
+  let onoFound = 0;
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="special-stage-container">
+      <div class="special-header">
+        <div class="special-title">⭐ ボーナス: 言葉あわせ ⭐</div>
+        <div class="special-timer" id="ono-timer">⏱ 20</div>
+      </div>
+      <div style="color:#bfdbfe; font-size:14px;">様子を表す言葉と、それに合う言葉をペアにしよう！</div>
+      <div class="special-grid" id="ono-grid1"></div>
+      <div class="special-grid" id="ono-grid2"></div>
+    </div>
+  `;
+  document.getElementById('game-container').appendChild(modal);
+  
+  const g1 = modal.querySelector('#ono-grid1'), g2 = modal.querySelector('#ono-grid2');
+  
+  words.forEach(w => {
+    const btn = document.createElement('div'); btn.className = 'ono-card'; btn.innerText = w;
+    btn.onclick = () => {
+      if(btn.classList.contains('matched')) return;
+      document.querySelectorAll('#ono-grid1 .ono-card').forEach(c => c.classList.remove('selected'));
+      btn.classList.add('selected'); selectedWord = w; playSE('click');
+    };
+    g1.appendChild(btn);
+  });
+  
+  matches.forEach(m => {
+    const btn = document.createElement('div'); btn.className = 'ono-card'; btn.innerText = m.text;
+    btn.onclick = () => {
+      if(btn.classList.contains('matched') || !selectedWord) return;
+      if (selectedWord === m.id) {
+        const colorClass = `matched-${onoFound % 4}`;
+        btn.classList.add('matched', colorClass);
+        const wBtn = Array.from(g1.children).find(c => c.innerText === selectedWord);
+        if(wBtn) wBtn.classList.add('matched', colorClass);
+        playSE('correct'); selectedWord = null; onoFound++;
+        if (onoFound >= 4) endOnoStage(true, modal);
+      } else {
+        btn.classList.add('error'); playSE('wrong');
+        setTimeout(() => btn.classList.remove('error'), 300);
+      }
+    };
+    g2.appendChild(btn);
+  });
+
+  playSE('fanfare');
+  let oTime = 20;
+  const oInt = setInterval(() => {
+    oTime--; modal.querySelector('#ono-timer').innerText = `⏱ ${oTime}`;
+    if(oTime <= 0) { clearInterval(oInt); endOnoStage(false, modal); }
+  }, 1000);
+
+  function endOnoStage(success, mNode) {
+    clearInterval(oInt);
+    playSE('milestone');
+    if (success) triggerConfetti();
+    const p = success ? 30 : onoFound * 5;
+    const n = totalPoints + p;
+    
+    // ペアが完成した状態を2秒間見せてからクリア表示へ
+    setTimeout(() => {
+      mNode.innerHTML = `
+        <div class="stage-clear-banner">
+          <h2>${success ? '🎊 コンプリート！' : '⏱ しゅうりょう！'}</h2>
+          <p>ボーナス <strong>＋${p}pt</strong></p>
+        </div>
+      `;
+      setTimeout(() => {
+        mNode.remove();
+        rollUpPoints(n, () => {
+          currentStage++;
+          startStage();
+        });
+      }, 2000);
+    }, 2000);
+  }
+}
+
+// --- 共通UI・ユーティリティ ---
+async function advancePosition(count) {
+  // マスが多い時は高速で進むように調整
+  const stepDelay = count > 15 ? 30 : (count > 5 ? 80 : 250);
+  
+  for (let step = 0; step < count; step++) {
+    // すでに50マスに到達していたらゴール演出を入れてリセット
+    if (currentPosition >= 50) {
+      await new Promise(resolve => triggerGoal(resolve));
+    }
+    
+    const pT = document.getElementById(`tile-${currentPosition}`);
+    if (pT && currentPosition > 0) { pT.classList.remove('active-orange'); pT.classList.add('active-red'); }
+    currentPosition++;
+    const cT = document.getElementById(`tile-${currentPosition}`);
+    if (cT) {
+      if (currentPosition < 50) cT.classList.add('active-orange'); else cT.classList.add('active-red');
+      cT.classList.remove('tile-pop'); void cT.offsetWidth; cT.classList.add('tile-pop');
+    }
+    playSE('click');
+    await new Promise(r => setTimeout(r, stepDelay));
+  }
+  updateTrackUI();
+  
+  if (currentPosition >= 50) {
+    await new Promise(resolve => triggerGoal(resolve));
+  }
+}
+
+function triggerGoal(onComplete) {
+  playSE('goal');
+  let c = 0, i = 0;
+  const int = setInterval(() => {
+    document.querySelectorAll('.track-tile').forEach(t => t.classList.remove('active-orbit'));
+    // 3マス連続で光らせて光の帯が走るように見せる
+    for (let offset = 0; offset < 3; offset++) {
+      const idx = (i - offset + 51) % 51;
+      const t = document.getElementById(`tile-${idx}`);
+      if (t) t.classList.add('active-orbit');
+    }
+    if (i % 2 === 0) playSE('orbit');
+    i++; 
+    if (i >= 51) { i = 0; c++; }
+    if (c >= 2) {
+      clearInterval(int);
+      document.querySelectorAll('.track-tile').forEach(t => t.classList.remove('active-orbit'));
+      triggerConfetti();
+      
+      // 2周光り終わった直後に緑の完走ボーナスウィンドウを表示
+      const modal = document.createElement('div'); 
+      modal.className = 'modal-overlay';
+      modal.innerHTML = `<div class="stage-clear-banner"><h2 style="color:#fde047;font-size:32px;">🏆 完走ボーナス！</h2><p style="font-size:24px;">＋100 pt</p></div>`;
+      document.getElementById('game-container').appendChild(modal);
+      
+      setTimeout(() => {
+        rollUpPoints(totalPoints + 100, () => {
+          modal.innerHTML = `
+            <div class="start-hero-card" style="padding:20px;">
+              <h2>🏆 50マス達成！</h2><p>現在: ${totalPoints}pt</p>
+              <button class="start-play-btn" id="goal-continue-btn" style="margin-top:10px;">つづける</button>
+            </div>`;
+          document.getElementById('goal-continue-btn').onclick = () => {
+             modal.remove();
+             currentPosition = 0;
+             updateTrackUI();
+             if (onComplete) onComplete();
+          };
+        });
+      }, 1800);
+    }
+  }, 32);
+}
+
+function rollUpPoints(target, onComp) {
+  const d = document.getElementById('points-display'); d.classList.add('rolling');
+  let c = totalPoints, diff = target - totalPoints;
+  totalPoints = target; // 先に状態を更新（バグ防止）
+  
+  if(diff<=0) { d.innerText=`⭐ ${target} pt`; d.classList.remove('rolling'); if(onComp) onComp(); return; }
+  const s = Math.min(30, diff), inc = diff/s; let step=0;
+  const int = setInterval(() => {
+    step++; c+=inc; d.innerText=`⭐ ${Math.round(c)} pt`; playSE('rollup');
+    if(step>=s) { clearInterval(int); d.innerText=`⭐ ${target} pt`; d.classList.remove('rolling'); if(onComp) onComp(); }
+  }, 35);
+}
+
+function handleTimeUp() {
+  clearInterval(timerInterval); playSE('wrong');
+  const m = document.createElement('div'); m.className = 'modal-overlay';
+  m.innerHTML = `<div class="start-hero-card"><h2>⏰ タイムアップ</h2><button class="start-play-btn" onclick="this.closest('.modal-overlay').remove(); startStage();">やりなおす</button></div>`;
+  document.getElementById('game-container').appendChild(m);
+}
+
+function triggerStageZoomIn(text, onComp) {
+  const o = document.getElementById('stage-zoom-overlay'), t = document.getElementById('stage-zoom-text');
+  t.innerText = text; t.classList.remove('animate'); o.classList.add('show'); playSE('zoomIn');
+  setTimeout(() => t.classList.add('animate'), 20);
+  setTimeout(() => { o.classList.remove('show'); t.classList.remove('animate'); if(onComp) onComp(); }, 1000);
+}
+
+function toggleRuby() {
+  isRubyHidden = !isRubyHidden;
+  const btn = document.getElementById('ruby-btn');
+  btn.innerText = isRubyHidden ? 'ふりがな: OFF' : 'ふりがな: ON';
+  const area = document.getElementById('composition-area');
+  if(isRubyHidden) area.classList.add('hide-ruby'); else area.classList.remove('hide-ruby');
+}
+
+function toggleSound() {
+  soundEnabled = !soundEnabled;
+  document.getElementById('sound-btn').innerText = soundEnabled ? '🔊 ON' : '🔇 OFF';
+}
+
+function initAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+function playSE(type) {
+  if (!soundEnabled || !audioCtx) return;
+  const n = audioCtx.currentTime;
+  try {
+    if (type === 'click') {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.frequency.setValueAtTime(600, n); o.frequency.exponentialRampToValueAtTime(800, n+0.05);
+      g.gain.setValueAtTime(0.1, n); g.gain.exponentialRampToValueAtTime(0.01, n+0.05);
+      o.connect(g); g.connect(audioCtx.destination); o.start(n); o.stop(n+0.05);
+    } else if (type === 'correct') {
+      [523.25, 659.25, 783.99].forEach((f, i) => {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.type='triangle';
+        o.frequency.setValueAtTime(f, n+i*0.08); g.gain.setValueAtTime(0.15, n+i*0.08); g.gain.exponentialRampToValueAtTime(0.01, n+i*0.08+0.2);
+        o.connect(g); g.connect(audioCtx.destination); o.start(n+i*0.08); o.stop(n+i*0.08+0.2);
+      });
+    } else if (type === 'wrong') {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.type='sawtooth';
+      o.frequency.setValueAtTime(150, n); o.frequency.linearRampToValueAtTime(100, n+0.2);
+      g.gain.setValueAtTime(0.2, n); g.gain.exponentialRampToValueAtTime(0.01, n+0.2);
+      o.connect(g); g.connect(audioCtx.destination); o.start(n); o.stop(n+0.2);
+    } else if (type === 'zoomIn' || type === 'rollup' || type === 'orbit') {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.frequency.setValueAtTime(400+Math.random()*400, n); g.gain.setValueAtTime(0.05, n); g.gain.exponentialRampToValueAtTime(0.005, n+0.05);
+      o.connect(g); g.connect(audioCtx.destination); o.start(n); o.stop(n+0.05);
+    } else if (type === 'milestone' || type === 'fanfare' || type === 'goal') {
+      [523.25, 659.25, 783.99, 1046.50].forEach((f, i) => {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.frequency.setValueAtTime(f, n+i*0.1); g.gain.setValueAtTime(0.2, n+i*0.1); g.gain.exponentialRampToValueAtTime(0.01, n+i*0.1+0.4);
+        o.connect(g); g.connect(audioCtx.destination); o.start(n+i*0.1); o.stop(n+i*0.1+0.4);
+      });
+    }
+  } catch(e){}
+}
+
+function triggerConfetti() {
+  const canvas = document.getElementById('confetti-canvas'); if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.parentElement.clientWidth; canvas.height = canvas.parentElement.clientHeight;
+  const particles = [], colors = ['#ef4444', '#f87171', '#fca5a5', '#f59e0b', '#fcd34d'];
+  for (let i = 0; i < 70; i++) {
+    particles.push({
+      x: canvas.width/2, y: canvas.height/2, vx: (Math.random()-0.5)*14, vy: (Math.random()-0.7)*14,
+      color: colors[Math.floor(Math.random()*colors.length)], size: Math.random()*8+4, rotation: Math.random()*360, rSpeed: (Math.random()-0.5)*10
+    });
+  }
+  let duration = 0;
+  function animate() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    particles.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.vy += 0.25; p.rotation += p.rSpeed;
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate((p.rotation*Math.PI)/180);
+      ctx.fillStyle = p.color; ctx.fillRect(-p.size/2,-p.size/2,p.size,p.size); ctx.restore();
+    });
+    duration++; if (duration < 90) requestAnimationFrame(animate); else ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+  animate();
+}
+
+window.addEventListener('load', () => {
+  initTrack();
+  const m = document.createElement('div');
+  m.className = 'modal-overlay';
+  m.innerHTML = `
+    <div class="start-hero-card">
+      <h1 class="start-hero-title" style="line-height: 1.3;">熟語かくれんぼ<br><span style="font-size: 0.75em;">２年</span></h1>
+      <p style="color: #fca5a5; font-size: 16px; margin-bottom: 24px; line-height: 1.6;">
+        作文の中から、いみに合う熟語を見つけよう！
+      </p>
+      <button class="start-play-btn" onclick="initAudio(); this.closest('.modal-overlay').remove(); startStage();">GAME START</button>
+    </div>
+  `;
+  document.getElementById('game-container').appendChild(m);
+});
+window.addEventListener('resize', initTrack);
+</script>
+</body>
+</html>
