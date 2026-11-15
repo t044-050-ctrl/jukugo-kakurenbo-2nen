@@ -3,10 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>熟語かくれんぼ ２年</title>
- <meta property="og:title" content="熟語かくれんぼ ２年">
-    <meta property="og:description" content="【２年国語】作文の中から熟語を見つけるゲームです。">
-    <meta property="og:type" content="website">
+<title>熟語かくれんぼ</title>
 <style>
   * { 
     box-sizing: border-box; 
@@ -271,8 +268,12 @@
   }
   .draggable-word:active { cursor: grabbing; transform: scale(1.05); }
   .draggable-word.dragged-out {
-    opacity: 0;
+    opacity: 1 !important;
+    border: 2px solid #f8caca;
+    background: #fffafa;
+    color: #d49a9a;
     pointer-events: none;
+    cursor: default;
   }
   
   /* Pattern B 埋め込みスロット */
@@ -1100,7 +1101,10 @@ function processDrop(word, slot, sourceElem, cloneElem) {
     
     slot.style.color = '#15803d';
     
-    if (sourceElem) sourceElem.classList.add('dragged-out');
+    if (sourceElem) {
+      sourceElem.style.opacity = '1';
+      sourceElem.classList.add('dragged-out');
+    }
     if (cloneElem) cloneElem.remove();
     
     const rIndex = currentIdioms.findIndex(i => i.word === word);
